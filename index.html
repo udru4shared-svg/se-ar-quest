@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>วิศวกรสังคม AR Quest</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { thai: ['Tahoma','Arial','sans-serif'] },
+      boxShadow: {
+        game: '0 12px 30px rgba(0,0,0,.25)',
+        glow: '0 0 22px rgba(255,230,70,.75)'
+      }
+    }
+  }
+}
+</script>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#07152f;font-family:Tahoma,Arial,sans-serif}
+button,input{font-family:inherit}
+#app{width:100vw;height:100vh;position:relative;overflow:hidden}
+#gameCanvas{position:absolute;inset:0;width:100%;height:100%;z-index:1}
+#video{position:absolute;right:12px;bottom:12px;width:180px;height:135px;object-fit:cover;border-radius:18px;z-index:5;display:none;transform:scaleX(-1);border:3px solid rgba(255,255,255,.75);box-shadow:0 8px 25px rgba(0,0,0,.35)}
+#handCanvas{position:absolute;right:12px;bottom:12px;width:180px;height:135px;border-radius:18px;z-index:6;pointer-events:none;display:none;transform:scaleX(-1)}
+.screen{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;padding:16px;background:linear-gradient(135deg,rgba(5,17,43,.94),rgba(14,39,82,.91))}
+.hidden{display:none!important}
+.panel{width:min(960px,96vw);max-height:94vh;overflow:auto;background:rgba(255,255,255,.96);border:4px solid #fff;border-radius:30px;box-shadow:0 20px 60px rgba(0,0,0,.45);padding:24px}
+.heroTitle{font-size:clamp(32px,6vw,72px);font-weight:1000;line-height:1;text-align:center;background:linear-gradient(90deg,#ffdc34,#ff7a00,#ffdc34);-webkit-background-clip:text;color:transparent;text-shadow:0 4px 0 rgba(255,255,255,.15);animation:bounce 1.4s ease-in-out infinite,glow 1.8s ease-in-out infinite}
+.subtitle{text-align:center;font-weight:900;color:#124f9d;font-size:clamp(18px,3vw,30px);margin:10px 0 22px}
+@keyframes bounce{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-10px) rotate(1deg)}}
+@keyframes glow{0%,100%{filter:drop-shadow(0 0 4px rgba(255,220,50,.25))}50%{filter:drop-shadow(0 0 18px rgba(255,220,50,.95))}}
+@keyframes pop{0%{transform:scale(.7);opacity:0}70%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+.pop{animation:pop .35s ease-out}
+.shake{animation:shake .35s ease-in-out}
+.float{animation:float 2s ease-in-out infinite}
+.gameBtn{border:0;border-radius:18px;padding:13px 20px;font-size:18px;font-weight:1000;cursor:pointer;transition:transform .12s,filter .12s;box-shadow:0 7px 0 rgba(0,0,0,.2)}
+.gameBtn:active{transform:translateY(6px);box-shadow:0 1px 0 rgba(0,0,0,.2)}
+.gameBtn:hover{filter:brightness(1.08)}
+.btnBlue{background:#1687e8;color:#fff}.btnGreen{background:#39b94a;color:#fff}.btnOrange{background:#ff9418;color:#fff}.btnPurple{background:#7b4fe8;color:#fff}.btnRed{background:#ed4a4a;color:#fff}.btnGray{background:#64748b;color:#fff}
+.field{width:100%;padding:13px 15px;border:3px solid #cbd5e1;border-radius:15px;font-size:18px;outline:none;background:#fff}
+.field:focus{border-color:#1687e8;box-shadow:0 0 0 4px rgba(22,135,232,.12)}
+.levelCard{cursor:pointer;border:4px solid #dbeafe;border-radius:22px;padding:17px;text-align:left;transition:.15s;background:#fff;box-shadow:0 7px 0 rgba(0,0,0,.12)}
+.levelCard:hover{transform:translateY(-3px)} .levelCard.selected{border-color:#ffae00;background:#fff8db;box-shadow:0 7px 0 #d08a00}
+.hud{position:absolute;top:12px;left:12px;right:12px;z-index:4;display:flex;justify-content:space-between;gap:8px;pointer-events:none}
+.badge{background:rgba(4,21,50,.86);color:#fff;border:2px solid rgba(255,255,255,.3);border-radius:16px;padding:8px 13px;font-weight:900;backdrop-filter:blur(7px)}
+#questionModal{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,10,30,.42)}
+.questionBox{width:min(850px,96vw);background:rgba(255,255,255,.97);border:5px solid #ffca28;border-radius:28px;box-shadow:0 20px 60px rgba(0,0,0,.5);padding:20px;animation:pop .3s ease-out}
+.answerGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.answer{position:relative;background:linear-gradient(135deg,#0b73c9,#22a4ef);color:#fff;border:3px solid #fff;border-radius:17px;padding:14px;text-align:left;font-size:18px;font-weight:900;min-height:65px;cursor:pointer;box-shadow:0 6px 0 #07508f;transition:.1s}
+.answer:hover{filter:brightness(1.1);transform:translateY(-2px)}
+.answer.selected{outline:5px solid #ffd43b;transform:scale(1.03)}
+.answer.correct{background:linear-gradient(135deg,#19a943,#63d66e);box-shadow:0 6px 0 #11752d}
+.answer.wrong{background:linear-gradient(135deg,#dc3030,#ff7373);box-shadow:0 6px 0 #8c1717}
+.progressContainer{position:absolute;left:50%;bottom:6%;transform:translateX(-50%);width:min(760px,88vw);height:30px;border-radius:15px;background:#1e293b;border:3px solid #90a4bd;overflow:hidden;z-index:3}
+#progressBar{width:0%;height:100%;background:linear-gradient(90deg,#ff9418,#ffdc34);transition:width 0.1s linear}
+#floatingMessage{position:absolute;top:22%;left:50%;transform:translateX(-50%);z-index:9;font-size:clamp(25px,5vw,50px);font-weight:1000;text-shadow:0 4px 0 rgba(0,0,0,.25);pointer-events:none}
+#resultScore{font-size:clamp(56px,12vw,120px);font-weight:1000;color:#f59e0b;text-shadow:0 6px 0 #8a5a00}
+.small{font-size:13px;color:#64748b}
+@media(max-width:700px){.answerGrid{grid-template-columns:1fr}.panel{padding:17px}.hud{font-size:12px}.gameBtn{font-size:16px}}
+</style>
+</head>
+<body>
+<div id="app">
+<canvas id="gameCanvas"></canvas>
+<video id="video" autoplay playsinline muted></video>
+<canvas id="handCanvas"></canvas>
+
+<div id="startScreen" class="screen">
+  <div class="panel">
+    <div class="text-center text-6xl mb-2">🔨🌳🧠✨</div>
+    <div class="heroTitle">วิศวกรสังคม</div>
+    <div class="subtitle">ผจญภัยเพื่อสังคม • AR HAMMER QUEST</div>
+    <div class="grid md:grid-cols-2 gap-5">
+      <div class="rounded-3xl bg-blue-50 p-5 border-2 border-blue-100">
+        <h2 class="text-2xl font-black text-blue-800 mb-4">🪪 ข้อมูลนักศึกษา</h2>
+        <label class="font-bold">ชื่อจริง</label>
+        <input id="firstName" class="field mb-3" autocomplete="given-name" placeholder="กรอกชื่อจริง">
+        <label class="font-bold">นามสกุล</label>
+        <input id="lastName" class="field mb-3" autocomplete="family-name" placeholder="กรอกนามสกุล">
+        <label class="font-bold">เลขที่นักศึกษา</label>
+        <input id="studentNo" class="field mb-2" inputmode="numeric" placeholder="เช่น 69123456">
+        <div class="small">ข้อมูลจะเก็บไว้ในเครื่องนี้ด้วย localStorage เพื่อให้เล่นต่อได้โดยไม่ใช้ Backend</div>
+      </div>
+      <div>
+        <h2 class="text-2xl font-black text-purple-800 mb-4">🎯 เลือกภารกิจ</h2>
+        <div id="levelCards" class="space-y-3">
+          <div class="levelCard selected" data-level="1">
+            <div class="flex justify-between"><b>⭐ LEVEL 1 — นักสังเกต</b><span>10 คะแนน/ข้อ</span></div>
+            <div class="text-sm mt-1">Fact vs Feeling • Evidence • การตั้งปัญหา</div>
+          </div>
+          <div class="levelCard" data-level="2">
+            <div class="flex justify-between"><b>⭐⭐ LEVEL 2 — นักวิเคราะห์</b><span>15 คะแนน/ข้อ</span></div>
+            <div class="text-sm mt-1">Fishbone • 5 Whys • Problem Tree</div>
+          </div>
+          <div class="levelCard" data-level="3">
+            <div class="flex justify-between"><b>⭐⭐⭐ LEVEL 3 — นักนวัตกร</b><span>20 คะแนน/ข้อ</span></div>
+            <div class="text-sm mt-1">Priority Matrix • Solution • Prototype • Reflection</div>
+          </div>
+        </div>
+        <div class="mt-5 grid grid-cols-2 gap-3">
+          <button id="startBtn" class="gameBtn btnGreen">🚀 เริ่มภารกิจ</button>
+          <button id="howBtn" class="gameBtn btnBlue">🔨 วิธีเล่น AR</button>
+        </div>
+      </div>
+    </div>
+    <div id="howBox" class="hidden mt-5 rounded-2xl bg-amber-50 border-2 border-amber-200 p-4">
+      <b>🔨 AR Hammer Control:</b> เปิดกล้อง → ชูนิ้วเลือกคำตอบ:
+      <br>👉 <b>1 นิ้ว</b> = เลือกข้อ A
+      <br>✌️ <b>2 นิ้ว</b> = เลือกข้อ B
+      <br>🤟 <b>3 นิ้ว</b> = เลือกข้อ C
+      <br>🖖 <b>4 นิ้ว</b> = เลือกข้อ D
+      <br><b>ชูค้างไว้ 1 วินาที</b> เพื่อใช้ค้อนทุบยืนยันคำตอบ!
+      <br><b>⌨️ สำรอง:</b> สามารถใช้เมาส์คลิกเพื่อตอบได้
+    </div>
+  </div>
+</div>
+
+<div id="gameScreen" class="hidden">
+  <div class="hud">
+    <div class="badge">🧑‍🔧 <span id="playerHud">-</span></div>
+    <div class="badge">🎯 Level <span id="levelHud">1</span> • ข้อ <span id="qHud">1</span>/<span id="totalHud">5</span></div>
+    <div class="badge">💰 <span id="scoreHud">0</span></div>
+  </div>
+  <div id="floatingMessage"></div>
+  <div class="progressContainer"><div id="progressBar"></div></div>
+</div>
+
+<div id="questionModal" class="hidden">
+  <div class="questionBox">
+    <div class="flex justify-between items-center gap-3 mb-2">
+      <div class="font-black text-orange-600">📍 จุดภารกิจ <span id="missionNo">1</span></div>
+      <div id="questionTag" class="px-3 py-1 rounded-full bg-purple-100 text-purple-700 font-black">SOCIAL ENGINEER</div>
+    </div>
+    <h2 id="questionText" class="text-xl md:text-2xl font-black text-slate-800 leading-relaxed mb-4"></h2>
+    <div id="answers" class="answerGrid"></div>
+    <div class="mt-4 flex flex-wrap justify-between items-center gap-2">
+      <div id="gestureHint" class="text-sm font-bold text-slate-500">🖐️ ชู 1-4 นิ้วเพื่อเลือก A-D ค้างไว้ 1 วินาทีเพื่อทุบตอบ</div>
+      <button id="submitBtn" class="gameBtn btnOrange">🔨 ทุบส่งคำตอบ</button>
+    </div>
+  </div>
+</div>
+
+<div id="resultScreen" class="screen hidden">
+  <div class="panel text-center max-w-3xl">
+    <div class="text-7xl float">🏆</div>
+    <h1 class="text-5xl font-black text-purple-700 mt-2">ภารกิจสำเร็จ!</h1>
+    <p class="text-xl font-bold text-slate-600">คุณได้ผ่านการฝึกคิดแบบวิศวกรสังคม</p>
+    <div id="resultScore">0</div>
+    <div class="text-2xl font-black text-slate-700 mb-5">คะแนน</div>
+    <div class="grid md:grid-cols-2 gap-3 text-left bg-blue-50 rounded-2xl p-5 border-2 border-blue-100">
+      <div><b>ชื่อ–นามสกุล:</b> <span id="resultName"></span></div>
+      <div><b>เลขที่นักศึกษา:</b> <span id="resultNo"></span></div>
+      <div><b>ระดับ:</b> <span id="resultLevel"></span></div>
+      <div><b>ตอบถูก:</b> <span id="resultCorrect"></span></div>
+      <div><b>คะแนนสูงสุดของระดับ:</b> <span id="resultMax"></span></div>
+      <div><b>ประเมิน:</b> <span id="resultRank"></span></div>
+    </div>
+    <div class="mt-5 flex flex-wrap justify-center gap-3">
+      <button id="againBtn" class="gameBtn btnGreen">🔄 เล่นอีกครั้ง</button>
+      <button id="menuBtn" class="gameBtn btnBlue">🏠 กลับเมนู</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script>
+'use strict';
+
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d');
+const video=document.getElementById('video');
+const handCanvas=document.getElementById('handCanvas');
+const hctx=handCanvas.getContext('2d');
+const startScreen=document.getElementById('startScreen');
+const gameScreen=document.getElementById('gameScreen');
+const questionModal=document.getElementById('questionModal');
+const resultScreen=document.getElementById('resultScreen');
+
+let W=innerWidth,H=innerHeight,dpr=Math.min(devicePixelRatio||1,2);
+function resize(){
+  W=innerWidth;H=innerHeight;dpr=Math.min(devicePixelRatio||1,2);
+  canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  handCanvas.width=180*dpr;handCanvas.height=135*dpr;
+}
+addEventListener('resize',resize);resize();
+
+const levels={
+  1:{
+    name:'นักสังเกต',points:10,
+    questions:[
+      {tag:'FACT vs FEELING',q:'พบว่าลูกค้าในโรงอาหารรออาหารนาน ข้อใดเป็น “FACT” ที่ควรเก็บเป็นหลักฐาน?',a:['ร้านนี้บริการแย่มาก','ฉันรู้สึกว่าร้านไม่ใส่ใจ','ลูกค้ารออาหารเฉลี่ย 25 นาที','พนักงานดูเหมือนไม่สนใจ'],c:2},
+      {tag:'EVIDENCE',q:'หากต้องศึกษาปัญหาขยะในมหาวิทยาลัย หลักฐานใดช่วยตรวจสอบสถานการณ์จริงได้ดีที่สุด?',a:['ความรู้สึกส่วนตัว','ภาพถ่ายและการสังเกตพื้นที่','การเดาจากข่าว','ความคิดเห็นของคนเพียงคนเดียว'],c:1},
+      {tag:'PROBLEM',q:'เมื่อชุมชนบอกว่า “คนรุ่นใหม่ไม่สนใจภูมิปัญญาท้องถิ่น” วิศวกรสังคมควรทำอะไรต่อ?',a:['เชื่อทันที','โต้แย้งทันที','เก็บข้อมูลจากคนหลายกลุ่ม','สรุปว่าเป็นความผิดของวัยรุ่น'],c:2},
+      {tag:'EMPATHY',q:'ชาวบ้านพูดว่า “เราเคยลองแก้แล้ว แต่ไม่สำเร็จ” การตอบสนองใดเหมาะสมที่สุด?',a:['รีบเสนอวิธีของเรา','บอกว่าครั้งนี้ต้องสำเร็จ','รับฟังและถามถึงประสบการณ์ที่ผ่านมา','เปลี่ยนไปคุยกับคนอื่น'],c:2},
+      {tag:'PROBLEM STATEMENT',q:'Problem Statement ที่ดีควรทำให้เห็นสิ่งใดชัดเจน?',a:['ใครผิด','ปัญหา ใครได้รับผลกระทบ และต้องการผลลัพธ์อะไร','งบประมาณสูงที่สุด','วิธีแก้ที่เราชอบ'],c:1}
+    ]
+  },
+  2:{
+    name:'นักวิเคราะห์',points:15,
+    questions:[
+      {tag:'FISHBONE',q:'Fishbone Diagram มีจุดประสงค์หลักเพื่ออะไร?',a:['ตกแต่งรายงาน','ค้นหาและจัดกลุ่มสาเหตุของปัญหา','คำนวณคะแนน','วางตารางเวลา'],c:1},
+      {tag:'5 WHYS',q:'การถาม “ทำไม?” ซ้ำอย่างเป็นระบบช่วยให้เราไปถึงอะไร?',a:['คนผิด','สาเหตุรากเหง้า (Root Cause)','ผลกระทบที่สวยงาม','งบประมาณ'],c:1},
+      {tag:'PROBLEM TREE',q:'ใน Problem Tree “ราก” หมายถึงอะไร?',a:['ผลกระทบ','ปัญหาหลัก','สาเหตุที่แท้จริง','วิธีประชาสัมพันธ์'],c:2},
+      {tag:'PROBLEM TREE',q:'ปัญหาหลักคือ “ขยะในมหาวิทยาลัยมาก” ข้อใดเหมาะเป็น “ผลกระทบ” บนกิ่ง?',a:['ถังขยะไม่เพียงพอ','ขาดระบบจัดเก็บ','กลิ่นเหม็นและภาพลักษณ์พื้นที่แย่','ไม่มีการคัดแยก'],c:2},
+      {tag:'SYSTEM THINKING',q:'ข้อใดสะท้อนการคิดเชิงระบบมากที่สุด?',a:['โทษคนที่ทำผิด','มองเฉพาะผลลัพธ์','พิจารณาคน กระบวนการ ทรัพยากร สิ่งแวดล้อม และข้อมูลที่สัมพันธ์กัน','เลือกสาเหตุแรกที่เห็น'],c:2}
+    ]
+  },
+  3:{
+    name:'นักนวัตกร',points:20,
+    questions:[
+      {tag:'PRIORITY MATRIX',q:'เมื่อมีหลายปัญหาและทรัพยากรจำกัด ควรเลือกปัญหาแบบใดเป็นอันดับแรก?',a:['Impact ต่ำ + ทำยาก','Impact สูง + Feasibility สูง','ปัญหาที่คนอื่นบอกให้ทำ','ปัญหาที่ดูใหญ่ที่สุดเสมอ'],c:1},
+      {tag:'SOLUTION',q:'แนวทางแก้ปัญหาที่เป็นวิศวกรสังคมควรมีลักษณะอย่างไร?',a:['นักศึกษาคิดเองทั้งหมด','ผู้เกี่ยวข้องมีส่วนร่วมในการออกแบบ','ใช้งบสูงที่สุด','ทำให้เร็วโดยไม่ทดลอง'],c:1},
+      {tag:'PROTOTYPE',q:'Prototype มีความสำคัญอย่างไร?',a:['ใช้ทดสอบแนวคิดก่อนทำจริง','ใช้แทนข้อมูลภาคสนาม','ใช้เพิ่มงบประมาณ','ใช้พิสูจน์ว่าใครผิด'],c:0},
+      {tag:'ADAPT',q:'หากทดลองแนวทางแก้แล้วไม่ได้ผล ควรทำอย่างไร?',a:['โทษผู้ใช้','ปกปิดผล','วิเคราะห์ผล ปรับปรุง และทดลองใหม่','ยกเลิกทุกอย่างทันที'],c:2},
+      {tag:'SOCIAL IMPACT',q:'หัวใจของวิศวกรสังคมข้อใดครบที่สุด?',a:['ทำโครงการให้เสร็จ','แก้ปัญหาแทนคนอื่น','เข้าใจปัญหา เข้าใจคน ร่วมคิด ร่วมทำ และสร้างการเปลี่ยนแปลง','ทำผลงานให้ดูดี'],c:2}
+    ]
+  }
+};
+
+let player={first:'',last:'',no:''};
+let level=1,qIndex=0,score=0,correct=0,selected=null;
+let missionActive=false,lastTime=0,toastTimer=0;
+let avatar={x:.16,y:.76,walk:0,dir:1};
+let clouds=[{x:.12,y:.16,s:1},{x:.52,y:.12,s:.8},{x:.82,y:.2,s:1.2}];
+let trees=[.08,.19,.31,.68,.8,.92];
+
+function savePlayer(){localStorage.setItem('seQuestPlayer',JSON.stringify(player))}
+function loadPlayer(){
+  try{const p=JSON.parse(localStorage.getItem('seQuestPlayer'));if(p){player=p;firstName.value=p.first||'';lastName.value=p.last||'';studentNo.value=p.no||''}}catch(e){}
+}
+loadPlayer();
+
+document.querySelectorAll('.levelCard').forEach(card=>{
+  card.onclick=()=>{
+    document.querySelectorAll('.levelCard').forEach(x=>x.classList.remove('selected'));
+    card.classList.add('selected');level=Number(card.dataset.level);
+  };
+});
+howBtn.onclick=()=>howBox.classList.toggle('hidden');
+
+startBtn.onclick=()=>{
+  const first=firstName.value.trim(),last=lastName.value.trim(),no=studentNo.value.trim();
+  if(!first||!last||!no){alert('กรุณากรอกชื่อจริง นามสกุล และเลขที่นักศึกษาให้ครบก่อนเริ่มเกม');return}
+  player={first,last,no};savePlayer();startGame();
+};
+againBtn.onclick=()=>{resultScreen.classList.add('hidden');startGame()};
+menuBtn.onclick=()=>{resultScreen.classList.add('hidden');startScreen.classList.remove('hidden');stopCamera()};
+
+function startGame(){
+  qIndex=0;score=0;correct=0;selected=null;missionActive=false;
+  playerHud.textContent=player.first+' '+player.last;
+  levelHud.textContent=level;scoreHud.textContent='0';qHud.textContent='1';totalHud.textContent=levels[level].questions.length;
+  startScreen.classList.add('hidden');resultScreen.classList.add('hidden');gameScreen.classList.remove('hidden');
+  avatar.x=.12;avatar.walk=0;startCamera();
+  setTimeout(showQuestion,900);
+}
+
+function showQuestion(){
+  if(qIndex>=levels[level].questions.length){finishGame();return}
+  const data=levels[level].questions[qIndex];
+  missionNo.textContent=qIndex+1;questionTag.textContent=data.tag;questionText.textContent=data.q;
+  answers.innerHTML='';
+  data.a.forEach((text,i)=>{
+    const b=document.createElement('button');b.className='answer';b.dataset.i=i;
+    b.innerHTML='<span class="mr-2">'+String.fromCharCode(65+i)+'.</span>'+text;
+    b.onclick=()=>selectAnswer(i);
+    answers.appendChild(b);
+  });
+  selected=null;missionActive=true;
+  document.getElementById('progressBar').style.width='0%';
+  questionModal.classList.remove('hidden');questionModal.querySelector('.questionBox').classList.remove('shake');void questionModal.offsetWidth;questionModal.querySelector('.questionBox').classList.add('pop');
+}
+
+function selectAnswer(i){
+  selected=i;
+  document.querySelectorAll('.answer').forEach((b,n)=>b.classList.toggle('selected',n===i));
+}
+submitBtn.onclick=submitAnswer;
+
+function submitAnswer(){
+  if(selected===null){showToast('🔨 ชู 1-4 นิ้วเลือก A-D ก่อนส่งคำตอบ','#fbbf24');return}
+  const data=levels[level].questions[qIndex];
+  const ok=selected===data.c;
+  document.querySelectorAll('.answer').forEach((b,i)=>{
+    if(i===data.c)b.classList.add('correct');
+    if(i===selected&&!ok)b.classList.add('wrong');
+  });
+  if(ok){score+=levels[level].points;correct++;showToast('🎉 ถูกต้อง +'+levels[level].points+' คะแนน','#22c55e')}
+  else{score=Math.max(0,score-5);showToast('💸 ผิด! ชดเชยลูกค้า -5 คะแนน','#ef4444')}
+  scoreHud.textContent=score;
+  missionActive=false;
+  setTimeout(()=>{
+    questionModal.classList.add('hidden');
+    qIndex++;qHud.textContent=Math.min(qIndex+1,levels[level].questions.length);
+    if(qIndex<levels[level].questions.length)setTimeout(showQuestion,700);else setTimeout(finishGame,650);
+  },1000);
+}
+
+function finishGame(){
+  stopCamera();gameScreen.classList.add('hidden');resultScreen.classList.remove('hidden');
+  resultName.textContent=player.first+' '+player.last;resultNo.textContent=player.no;
+  resultLevel.textContent='Level '+level+' — '+levels[level].name;
+  resultCorrect.textContent=correct+' / '+levels[level].questions.length;
+  resultMax.textContent=levels[level].questions.length*levels[level].points;
+  resultScore.textContent=score;
+  const pct=score/(levels[level].questions.length*levels[level].points);
+  resultRank.textContent=pct>=.9?'🏆 วิศวกรสังคมระดับ Master':pct>=.7?'⭐ วิศวกรสังคมระดับ Pro':pct>=.5?'💡 นักฝึกคิด':'🌱 เริ่มต้นได้ดี';
+  localStorage.setItem('seQuestLastResult',JSON.stringify({player,level,score,correct,date:new Date().toISOString()}));
+}
+
+function showToast(text,bg){
+  floatingMessage.textContent=text;floatingMessage.style.color=bg;floatingMessage.classList.remove('pop');void floatingMessage.offsetWidth;floatingMessage.classList.add('pop');
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>floatingMessage.textContent='',1400);
+}
+
+function roundRect(c,x,y,w,h,r){
+  r=Math.min(r,w/2,h/2);c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();
+}
+function drawScene(t){
+  ctx.clearRect(0,0,W,H);
+  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#6fd3ff');g.addColorStop(.58,'#d8f6ff');g.addColorStop(1,'#68c56d');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // sun
+  ctx.fillStyle='#ffd43b';ctx.beginPath();ctx.arc(W*.82,H*.15,Math.min(W,H)*.065,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='rgba(255,212,59,.45)';ctx.lineWidth=8;
+  for(let i=0;i<10;i++){const a=i*Math.PI/5;ctx.beginPath();ctx.moveTo(W*.82+Math.cos(a)*H*.08,H*.15+Math.sin(a)*H*.08);ctx.lineTo(W*.82+Math.cos(a)*H*.105,H*.15+Math.sin(a)*H*.105);ctx.stroke()}
+  // clouds
+  clouds.forEach(c=>{const x=c.x*W+Math.sin(t*.00025+c.x*8)*8,y=c.y*H,s=c.s*H*.035;ctx.fillStyle='rgba(255,255,255,.88)';ctx.beginPath();ctx.arc(x,y,s,0,Math.PI*2);ctx.arc(x+s,y-s*.4,s*1.2,0,Math.PI*2);ctx.arc(x+s*2,y,s*.9,0,Math.PI*2);ctx.fill()});
+  // distant campus
+  ctx.fillStyle='#f5f1e8';roundRect(ctx,W*.55,H*.26,W*.32,H*.28,10);ctx.fill();ctx.fillStyle='#c58c5a';ctx.fillRect(W*.54,H*.25,W*.34,H*.035);
+  ctx.fillStyle='#7b9cc8';for(let r=0;r<3;r++)for(let col=0;col<6;col++)ctx.fillRect(W*(.58+col*.045),H*(.31+r*.065),W*.025,H*.035);
+  // road
+  ctx.fillStyle='#9ba6b4';ctx.beginPath();ctx.moveTo(W*.38,H);ctx.lineTo(W*.47,H*.47);ctx.lineTo(W*.62,H*.47);ctx.lineTo(W*.75,H);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.65)';ctx.lineWidth=4;ctx.setLineDash([22,18]);ctx.beginPath();ctx.moveTo(W*.54,H);ctx.lineTo(W*.545,H*.48);ctx.stroke();ctx.setLineDash([]);
+  // grass
+  ctx.fillStyle='#53b957';ctx.fillRect(0,H*.72,W,H*.28);
+  // trees
+  trees.forEach((px,i)=>{const x=px*W,y=H*(.68-(i%2)*.05),s=H*(.035+(i%3)*.006);ctx.fillStyle='#7a4d2b';ctx.fillRect(x-s*.18,y,s*.36,s*1.6);ctx.fillStyle=i%2?'#1d8f4b':'#2aa85a';ctx.beginPath();ctx.arc(x,y,s*1.4,0,Math.PI*2);ctx.arc(x-s*.8,y+s*.25,s,0,Math.PI*2);ctx.arc(x+s*.8,y+s*.25,s,0,Math.PI*2);ctx.fill()});
+  // mission beacons
+  [0.32,0.56,0.76].forEach((px,i)=>{const yy=H*(.63-(i%2)*.05);ctx.fillStyle='rgba(255,211,59,.22)';ctx.beginPath();ctx.arc(px*W,yy,28+Math.sin(t*.004+i)*5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ffd43b';ctx.font='bold 28px Arial';ctx.textAlign='center';ctx.fillText('?',px*W,yy+10)});
+  // avatar
+  avatar.walk+=.006*(t-lastTime+16);const bob=Math.sin(avatar.walk)*3;
+  const ax=avatar.x*W,ay=avatar.y*H+bob,sc=Math.max(1,Math.min(W,H)/700);
+  ctx.save();ctx.translate(ax,ay);
+  ctx.fillStyle='rgba(0,0,0,.18)';ctx.beginPath();ctx.ellipse(0,36*sc,27*sc,8*sc,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#7b4f2a';roundRect(ctx,-25*sc,-35*sc,50*sc,63*sc,10*sc);ctx.fill();
+  ctx.fillStyle='#1e3a8a';roundRect(ctx,-23*sc,-8*sc,46*sc,42*sc,8*sc);ctx.fill();
+  ctx.fillStyle='#ffd2a6';ctx.beginPath();ctx.arc(0,-45*sc,20*sc,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#3a2417';ctx.beginPath();ctx.arc(0,-54*sc,21*sc,Math.PI,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold '+(13*sc)+'px Arial';ctx.textAlign='center';ctx.fillText('SE',0,-2*sc);
+  ctx.restore();
+  // sign
+  ctx.fillStyle='rgba(7,29,65,.85)';roundRect(ctx,W*.03,H*.22,W*.27,H*.16,18);ctx.fill();ctx.fillStyle='#fff';ctx.font='900 '+Math.min(24,W*.024)+'px Tahoma';ctx.textAlign='left';ctx.fillText('🧭 ภารกิจวิศวกรสังคม',W*.055,H*.275);ctx.font='700 '+Math.min(17,W*.017)+'px Tahoma';ctx.fillText('เดินสำรวจ → พบปัญหา → วิเคราะห์ → ลงมือ',W*.055,H*.325);
+}
+function animate(t){
+  drawScene(t);lastTime=t;requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+// MediaPipe hand tracking (1-4 นิ้วเลือกข้อ A-D + ค้างไว้เพื่อทุบค้อน)
+let camera=null,hands=null,cameraRunning=false;
+let holdFrames=0,targetAnswer=-1;
+
+async function startCamera(){
+  if(!navigator.mediaDevices?.getUserMedia){gestureHint.textContent='🖱️ กล้องไม่พร้อม — ใช้เมาส์/แตะหน้าจอแทนได้';return}
+  try{
+    if(!hands){
+      hands=new Hands({locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+      hands.setOptions({maxNumHands:1,modelComplexity:0,minDetectionConfidence:.55,minTrackingConfidence:.55});
+      hands.onResults(onHands);
+    }
+    camera=new Camera(video,{onFrame:async()=>{await hands.send({image:video})},width:640,height:480});
+    await camera.start();cameraRunning=true;video.style.display='block';handCanvas.style.display='block';
+    gestureHint.textContent='🖐️ พร้อม: ชู 1-4 นิ้วเพื่อเลือก A-D ค้างไว้ 1 วินาทีเพื่อทุบ';
+  }catch(err){
+    console.warn(err);gestureHint.textContent='🖱️ เปิดกล้องไม่ได้ — ใช้เมาส์/แตะหน้าจอแทนได้';
+  }
+}
+function stopCamera(){
+  cameraRunning=false;video.style.display='none';handCanvas.style.display='none';
+  try{if(camera?.stop)camera.stop()}catch(e){}
+}
+function onHands(res){
+  hctx.clearRect(0,0,180,135);
+  if(!res.multiHandLandmarks?.length){
+    holdFrames=0;
+    document.getElementById('progressBar').style.width='0%';
+    return;
+  }
+  const lm=res.multiHandLandmarks[0];
+  hctx.strokeStyle='rgba(80,255,130,.9)';hctx.lineWidth=2;
+  const pairs=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+  pairs.forEach(p=>{hctx.beginPath();hctx.moveTo(lm[p[0]].x*180,lm[p[0]].y*135);hctx.lineTo(lm[p[1]].x*180,lm[p[1]].y*135);hctx.stroke()});
+  lm.forEach((p,i)=>{hctx.fillStyle='#5cff88';hctx.beginPath();hctx.arc(p.x*180,p.y*135,3,0,Math.PI*2);hctx.fill()});
+
+  // นับจำนวนนิ้วที่ชูขึ้น (นิ้วชี้, กลาง, นาง, ก้อย)
+  let fingerCount=0;
+  if(lm[8].y<lm[6].y)fingerCount++;
+  if(lm[12].y<lm[10].y)fingerCount++;
+  if(lm[16].y<lm[14].y)fingerCount++;
+  if(lm[20].y<lm[18].y)fingerCount++;
+
+  if(!questionModal.classList.contains('hidden')){
+    let newTarget=-1;
+    if(fingerCount===1)newTarget=0; // ข้อ A
+    if(fingerCount===2)newTarget=1; // ข้อ B
+    if(fingerCount===3)newTarget=2; // ข้อ C
+    if(fingerCount===4)newTarget=3; // ข้อ D
+
+    if(newTarget!==-1){
+      selectAnswer(newTarget);
+      if(targetAnswer===newTarget){
+        holdFrames++;
+        const pct=Math.min(100,(holdFrames/25)*100);
+        document.getElementById('progressBar').style.width=pct+'%';
+        if(holdFrames>=25){
+          submitAnswer();
+          holdFrames=0;
+          document.getElementById('progressBar').style.width='0%';
+        }
+      }else{
+        targetAnswer=newTarget;
+        holdFrames=0;
+        document.getElementById('progressBar').style.width='0%';
+      }
+    }else{
+      targetAnswer=-1;
+      holdFrames=0;
+      document.getElementById('progressBar').style.width='0%';
+    }
+  }
+}
+</script>
+</body>
+</html>
